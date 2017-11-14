@@ -1,0 +1,63 @@
+/* ICC Model */
+
+#Written by James O'Malley 07/16/2014, 08/14/2014
+#Option 5 Data Analysis: Estimates model and outputs ICC and reliability (n = 2, 3, 4) for each of the three studies
+#Updated by Carly Bobak 03/22/2017 to convert to JAGS format
+#Assumes patient IDs are number consecutively starting from 1
+
+model
+{
+   for (i in 1:length(patient)) {
+      sdm[i] ~ dnorm(mu[i],prec[i]); 
+      mu[i] <- 100*(th[patient[i]] + be[2]*ratercent[i] + be[3]*da[i]);
+      prec[i] <- 1/(10000*sigma[study[i]]*th[patient[i]]*(1 - th[patient[i]])); 
+      #Different within variance per study
+
+      ratercent[i] <- rater[i] - 1.5; #Centers predictor
+      chestpain[i] <- equals(study[i], 1);
+      osteo1[i] <- equals(study[i], 2);
+      osteo2[i] <- equals(study[i], 3);
+   }
+
+   #Distribution for random effects
+   for (j in 1:max(patient)) {
+      th[j] ~ dnorm(ga[study[pos[j]]], itau[study[pos[j]]])T(0,1); 
+      #Between 0 and 1 
+      #True mean assessment of SDM for case
+      pos[j] <- 2*j - 1;
+   }
+  for (k in 1:3) {
+      ga[k] ~ dnorm(be[1],itau2);
+   }    
+  
+   #Prior for fixed effects
+   be[1] ~ dnorm(0.4,10); #Mean of intercept is set to the expected overall proportion of SDM
+   for (k in 2:3) {
+      be[k] ~ dnorm(0,10);
+   }
+
+   #Prior for between patient variance
+   for (k in 1:3) {
+      isigma[k] ~ dgamma(1.0E-3,1.0E-3);
+      sigma[k] <- 1.0/isigma[k];
+      itau[k] ~ dgamma(1.0E-3,1.0E-3);
+      tau[k] <- 1.0/itau[k];
+   }
+   itau2 ~ dgamma(1.0E-3,1.0E-3);
+   taustudy <- 1.0/itau2;
+
+   #Compute ICC for a randomly selected new patient
+   for (k in 1:3) {
+      la[k] <- ga[k] + be[3]; #Compute assuming da used
+      thnew[k] ~ dnorm(la[k],itau[k])T(0,1);
+      wvar[k] <- sigma[k]*thnew[k]*(1 - thnew[k]);
+      mvar[k] <- taustudy + tau[k]; #If wanted to compare patients across studies: We don't recommend!
+      ICC[k] <- tau[k]/(tau[k] + wvar[k]);
+      R2[k] <- tau[k]/(tau[k] + wvar[k]/2);
+      R3[k] <- tau[k]/(tau[k] + wvar[k]/3);
+      R4[k] <- tau[k]/(tau[k] + wvar[k]/4);
+   }
+}
+
+
+
